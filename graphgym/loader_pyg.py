@@ -3,8 +3,9 @@ from typing import Callable
 import torch
 import torch_geometric.transforms as T
 from torch_geometric.datasets import (PPI, Amazon, Coauthor, KarateClub,
-                                      MNISTSuperpixels, Planetoid, QM7b,
-                                      TUDataset)
+                                      MNISTSuperpixels, Planetoid, QM7b)
+from graphgym.tu_dataset import TUDataset
+from graphgym.ectd_utils import adj_pinv
 from torch_geometric.loader import (ClusterLoader, DataLoader,
                                     GraphSAINTEdgeSampler,
                                     GraphSAINTNodeSampler,
@@ -49,6 +50,19 @@ def load_pyg(name, dataset_dir):
             dataset = TUDataset(dataset_dir, name, transform=T.Constant())
         else:
             dataset = TUDataset(dataset_dir, name[3:])
+        
+        # to select ectd neighborhoods (topk/thres)
+        # set edge attr
+        edge_weight = []
+        edge_index = []
+
+        for i, data in enumerate(dataset):
+            edge_index_i, edge_weight_i = adj_pinv(data, name[3:], i, topk=0.2)
+            edge_weight.append(edge_weight_i)
+            edge_index.append(edge_index_i)
+
+        dataset = dataset.set_edge_weight(edge_weight)
+        dataset = dataset.set_edge_index(edge_index)
     elif name == 'Karate':
         dataset = KarateClub()
     elif 'Coauthor' in name:

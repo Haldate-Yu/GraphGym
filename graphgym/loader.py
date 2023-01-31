@@ -10,9 +10,10 @@ from deepsnap.dataset import GraphDataset
 from ogb.graphproppred import PygGraphPropPredDataset
 from torch.utils.data import DataLoader
 from torch_geometric.datasets import (PPI, Amazon, Coauthor, KarateClub,
-                                      MNISTSuperpixels, Planetoid, QM7b,
-                                      TUDataset)
+                                      MNISTSuperpixels, Planetoid, QM7b)
 
+from graphgym.tu_dataset import TUDataset
+from graphgym.ectd_utils import adj_pinv
 import graphgym.models.feature_augment as preprocess
 import graphgym.register as register
 from graphgym.config import cfg
@@ -37,6 +38,20 @@ def load_pyg(name, dataset_dir):
             dataset_raw = TUDataset(dataset_dir, name, transform=T.Constant())
         else:
             dataset_raw = TUDataset(dataset_dir, name[3:])
+
+        # to select ectd neighborhoods (topk/thres)
+        # set edge attr
+        edge_weight = []
+        edge_index = []
+
+        for i, data in enumerate(dataset_raw):
+            edge_index_i, edge_weight_i = adj_pinv(data, name[3:], i, topk=0.2)
+            edge_weight.append(edge_weight_i)
+            edge_index.append(edge_index_i)
+
+        dataset_raw = dataset_raw.set_edge_weight(edge_weight)
+        dataset_raw = dataset_raw.set_edge_index(edge_index)
+        
         # TU_dataset only has graph-level label
         # The goal is to have synthetic tasks
         # that select smallest 100 graphs that have more than 200 edges
@@ -49,6 +64,7 @@ def load_pyg(name, dataset_dir):
             size = torch.tensor(size)
             order = torch.argsort(size)[:100]
             dataset_raw = dataset_raw[order]
+
     elif name == 'Karate':
         dataset_raw = KarateClub()
     elif 'Coauthor' in name:
